@@ -4,7 +4,7 @@ import { FC, Suspense, useState } from 'react';
 import { Avatar, Box, IconButton, Typography } from '@mui/material';
 import { Menu } from '@mui/icons-material';
 import { ArrowLeftIcon } from '@mui/x-date-pickers';
-import { useRouter } from 'next/navigation';
+import { notFound, useRouter } from 'next/navigation';
 
 import useOrganization from 'features/organizations/hooks/useOrganization';
 import ZUIFutures from 'zui/ZUIFutures';
@@ -120,7 +120,12 @@ const Page: FC<{ areaId: number; assignment: ZetkinAreaAssignment }> = ({
               zIndex: 99999,
             }}
           >
-            <CanvassSidebar assignment={assignment} />
+            {selectedArea && (
+              <CanvassSidebar
+                assignment={assignment}
+                selectedArea={selectedArea}
+              />
+            )}
           </Box>
         </Box>
       )}
@@ -140,7 +145,7 @@ const CanvassPage: FC<CanvassPageProps> = ({ areaAssId, areaId }) => {
   );
 
   if (!assignment) {
-    return null;
+    notFound();
   }
 
   return (

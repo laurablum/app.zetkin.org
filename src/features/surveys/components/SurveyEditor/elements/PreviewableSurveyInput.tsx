@@ -12,12 +12,13 @@ type HeadlinePreviewableInputProps = {
   onChange: (value: string) => void;
   onSwitchMode: (newMode: ZUIPreviewableMode) => void;
   placeholder: string;
+  required?: boolean;
   value: string | undefined | null;
   variant: keyof typeof VARIANTS;
 };
 
 const VARIANTS = {
-  content: { fontSize: '1.1em' },
+  content: { fontSize: '1.1em', whiteSpace: 'pre-line' },
   header: { fontSize: '2em' },
 } as const;
 
@@ -27,6 +28,7 @@ const PreviewableSurveyInput: FC<HeadlinePreviewableInputProps> = ({
   mode,
   onChange,
   onSwitchMode,
+  required,
   placeholder,
   value,
   variant,
@@ -40,10 +42,15 @@ const PreviewableSurveyInput: FC<HeadlinePreviewableInputProps> = ({
       renderInput={(props) => (
         <TextField
           fullWidth
-          inputProps={{ ...props, sx: VARIANTS[variant] }}
           label={label}
           multiline={variant === 'content'}
           onChange={(ev) => onChange(ev.target.value)}
+          slotProps={{
+            htmlInput: {
+              ...props,
+              sx: VARIANTS[variant],
+            },
+          }}
           sx={{ marginBottom: 2 }}
           value={value}
         />
@@ -57,6 +64,7 @@ const PreviewableSurveyInput: FC<HeadlinePreviewableInputProps> = ({
           sx={{ ...VARIANTS[variant], wordBreak: 'break-word' }}
         >
           {value || placeholder}
+          {required && '*'}
         </Typography>
       )}
       value={value || placeholder}

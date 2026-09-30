@@ -1,12 +1,15 @@
-import { m, makeMessages } from 'core/i18n';
+import { m, makeMessages } from 'core/i18n/messages';
 
 export default makeMessages('feat.profile', {
+  customFields: {
+    notEditable: m('This field cannot be edited by your organization'),
+  },
   delete: {
-    button: m('Remove person'),
+    button: m('Delete person'),
     confirm: m<{ name: string; org: string }>(
       'Are you sure you want to delete {name} from {org}, and all related organizations? This is a permanent action.'
     ),
-    title: m('Delete account'),
+    title: m('Delete person'),
     warning: m('This cannot be undone!'),
   },
   details: {
@@ -19,6 +22,12 @@ export default makeMessages('feat.profile', {
   ellipsisMenu: {
     merge: m('Merge with...'),
   },
+  events: {
+    noPast: m('No past events'),
+    noUpcoming: m('No upcoming events'),
+    past: m('Past events'),
+    upcoming: m('Upcoming events'),
+  },
   genders: {
     f: m('Female'),
     m: m('Male'),
@@ -28,6 +37,20 @@ export default makeMessages('feat.profile', {
   journeys: {
     addButton: m('Start new journey'),
     title: m('Journeys'),
+  },
+  notes: {
+    addNoteButton: m('Add note'),
+    cancelButton: m('Cancel'),
+    note: {
+      author: m<{ authorName: JSX.Element }>('{authorName} added a note'),
+      delete: m('Delete'),
+      deleteWarningDescription: m<{ name: string }>(
+        'Are you sure you want to delete this note about {name}? Deleting a note cannot be undone.'
+      ),
+      deleteWarningTitle: m('Delete note'),
+    },
+    placeHolder: m('Write a note'),
+    title: m('Notes'),
   },
   numberOfChangesMessage: m<{ number: number }>(
     'Will update {number, plural, =1 {1 field} other {# fields}}'
@@ -43,10 +66,14 @@ export default makeMessages('feat.profile', {
     noRole: m('No role'),
   },
   saveButton: m('Save'),
+  surveySubmissions: {
+    showMore: m<{ numExtra: number }>('+ {numExtra} more'),
+    title: m('Survey Submissions'),
+  },
   tabs: {
+    events: m('Events'),
     manage: m('Manage'),
     profile: m('Profile'),
-    timeline: m('Timeline'),
   },
   tags: {
     createAndApplyLabel: m('Create and apply'),

@@ -4,12 +4,14 @@ import { Box } from '@mui/material';
 import ZUISection from 'zui/components/ZUISection';
 import ZUIText from 'zui/components/ZUIText';
 import ZUIMarkdown from 'zui/ZUIMarkdown';
-import { LaneStep, ZetkinCall } from '../types';
+import { LaneStep, UnfinishedCall } from '../types';
 import ZUITabView from 'zui/components/ZUITabView';
 import { AboutContent } from './AboutSection';
+import { Msg, useMessages } from 'core/i18n';
+import messageIds from '../l10n/messageIds';
 
 type Props = {
-  call: ZetkinCall | null;
+  call: UnfinishedCall | null;
   instructions: string;
   step: LaneStep;
 };
@@ -17,27 +19,32 @@ type Props = {
 const Instructions = ({ instructions }: { instructions: string }) => (
   <ZUIText component="div">
     {instructions ? (
-      <ZUIMarkdown markdown={instructions} />
+      <Box sx={{ paddingBottom: 10 }}>
+        <ZUIMarkdown markdown={instructions} />
+      </Box>
     ) : (
-      "This assignment doesn't have instructions."
+      <Msg id={messageIds.instructions.noInstructions} />
     )}
   </ZUIText>
 );
 
 const InstructionsSection: FC<Props> = ({ call, instructions, step }) => {
+  const messages = useMessages(messageIds);
   const [selectedTab, setSelectedTab] = useState<'instructions' | 'about'>(
     'instructions'
   );
 
   useEffect(() => {
+    let timerId: ReturnType<typeof setTimeout>;
     if (step == LaneStep.REPORT) {
       setSelectedTab('instructions');
-      setTimeout(() => {
+      timerId = setTimeout(() => {
         setSelectedTab('about');
       }, 600);
     } else {
       setSelectedTab('instructions');
     }
+    return () => clearTimeout(timerId);
   }, [step]);
 
   if (call && step == LaneStep.REPORT) {
@@ -52,12 +59,14 @@ const InstructionsSection: FC<Props> = ({ call, instructions, step }) => {
           fullWidth
           items={[
             {
-              label: 'Instructions',
+              label: messages.instructions.title(),
               render: () => <Instructions instructions={instructions} />,
               value: 'instructions',
             },
             {
-              label: `About ${call.target.first_name}`,
+              label: messages.about.title({
+                name: call.target.first_name,
+              }),
               render: () => (
                 <Box
                   sx={{
@@ -81,12 +90,19 @@ const InstructionsSection: FC<Props> = ({ call, instructions, step }) => {
       </Box>
     );
   }
+
   return (
     <ZUISection
       borders={false}
       fullHeight
-      renderContent={() => <Instructions instructions={instructions} />}
-      title={'Instructions'}
+      renderContent={() => {
+        if (!call && step != LaneStep.START) {
+          return null;
+        }
+
+        return <Instructions instructions={instructions} />;
+      }}
+      title={messages.instructions.title()}
     />
   );
 };

@@ -24,7 +24,10 @@ const ZUIPublicFooter: FC = () => {
       sx={{ opacity: 0.75 }}
     >
       <ZUILogo />
-      <ZUIText variant="bodySmRegular">Zetkin</ZUIText>
+      <ZUIText variant="bodySmRegular">
+        Zetkin
+        {!!env.vars.ZETKIN_APP_VERSION && ` ${env.vars.ZETKIN_APP_VERSION}`}
+      </ZUIText>
       <ZUILink
         href={
           env.vars.ZETKIN_PRIVACY_POLICY_LINK || messages.privacyPolicyLink()

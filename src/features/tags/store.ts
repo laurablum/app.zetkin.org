@@ -51,7 +51,7 @@ const tagsSlice = createSlice({
     },
     tagCreate: (state) => {
       // TODO: This is inconsistent with other features. The list itself is not truly loading, just some of the contents
-      state.tagList.isLoading;
+      state.tagList.isLoading = true;
     },
     tagCreated: (state, action: PayloadAction<ZetkinTag>) => {
       const tag = action.payload;
@@ -71,11 +71,29 @@ const tagsSlice = createSlice({
     },
     tagGroupCreate: (state) => {
       // TODO: This is inconsistent with other features. The list itself is not truly loading, just some of the contents
-      state.tagGroupList.isLoading;
+      state.tagGroupList.isLoading = true;
     },
     tagGroupCreated: (state, action: PayloadAction<ZetkinTagGroup>) => {
       const tagGroup = action.payload;
       remoteItemUpdated(state.tagGroupList, tagGroup);
+    },
+    tagGroupDeleted: (state, action: PayloadAction<number>) => {
+      const tagGroupId = action.payload;
+      remoteItemDeleted(state.tagGroupList, tagGroupId);
+    },
+    tagGroupUpdate: (state, action: PayloadAction<[number, string[]]>) => {
+      const [tagGroupId, mutating] = action.payload;
+      remoteItemUpdate(state.tagGroupList, tagGroupId, mutating);
+    },
+    tagGroupUpdated: (state, action: PayloadAction<ZetkinTagGroup>) => {
+      const tagGroup = action.payload;
+      remoteItemUpdated(state.tagGroupList, tagGroup);
+
+      for (const tagItem of state.tagList.items) {
+        if (tagItem.data?.group?.id == tagGroup.id) {
+          tagItem.data.group = tagGroup;
+        }
+      }
     },
     tagGroupsLoad: (state) => {
       state.tagGroupList.isLoading = true; // Same as above comment
@@ -139,6 +157,9 @@ export const {
   tagDeleted,
   tagGroupCreate,
   tagGroupCreated,
+  tagGroupUpdate,
+  tagGroupUpdated,
+  tagGroupDeleted,
   tagGroupsLoad,
   tagGroupsLoaded,
   tagLoad,

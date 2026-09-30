@@ -14,11 +14,16 @@ import {
 import FloorEditor from './FloorEditor';
 import { EditedFloor } from './types';
 import AddFloorButton from './AddFloorButton';
+import useIsMobile from 'utils/hooks/useIsMobile';
+import useSortedMetrics from 'features/canvass/hooks/useSortedMetrics';
+
+const naturalCmp = new Intl.Collator(undefined, { numeric: true }).compare;
 
 type Props = {
   assignment: ZetkinAreaAssignment;
   draftFloors: EditedFloor[] | null;
   location: ZetkinLocation;
+  onClickDetails: (householdId: number) => void;
   onClickVisit: (householdId: number) => void;
   onEditChange: (floors: EditedFloor[]) => void;
   onSelectHousehold: (householdId: number) => void;
@@ -30,6 +35,7 @@ const FloorMatrix: FC<Props> = ({
   assignment,
   draftFloors,
   location,
+  onClickDetails,
   onClickVisit,
   onEditChange,
   onSelectHousehold,
@@ -37,11 +43,13 @@ const FloorMatrix: FC<Props> = ({
   selectedHouseholdIds,
 }) => {
   const households = useHouseholds(location.organization_id, location.id);
+  const isMobile = useIsMobile();
 
-  const metrics = useAreaAssignmentMetrics(
+  const metricsUnsorted = useAreaAssignmentMetrics(
     location.organization_id,
     assignment.id
   );
+  const metrics = useSortedMetrics(metricsUnsorted);
 
   const { lastVisitByHouseholdId } = useVisitReporting(
     location.organization_id,
@@ -54,7 +62,7 @@ const FloorMatrix: FC<Props> = ({
     const floor1 = h1.level ?? Infinity;
 
     if (floor0 == floor1) {
-      return h0.title.localeCompare(h1.title);
+      return naturalCmp(h0.title, h1.title);
     }
 
     return floor0 - floor1;
@@ -91,7 +99,7 @@ const FloorMatrix: FC<Props> = ({
   const unlikelyToBeSingleFloorInRealLife = households.length > 8;
   const householdsLikelyCreatedWithoutFloors =
     hasOnlyLevelZero && unlikelyToBeSingleFloorInRealLife;
-  const shouldStartExpanded = householdsLikelyCreatedWithoutFloors;
+  const shouldStartExpanded = householdsLikelyCreatedWithoutFloors || !isMobile;
 
   return (
     <Box
@@ -191,8 +199,12 @@ const FloorMatrix: FC<Props> = ({
 
               return {
                 household,
+                lastVisitMetrics: mostRecentVisit
+                  ? mostRecentVisit.metrics
+                  : null,
                 lastVisitSuccess,
                 lastVisitTime: mostRecentVisit?.created ?? null,
+                metrics,
               };
             });
 
@@ -203,6 +215,7 @@ const FloorMatrix: FC<Props> = ({
                 householdItems={householdItems}
                 initialExpanded={shouldStartExpanded}
                 onClick={(householdId) => onSelectHousehold(householdId)}
+                onClickDetails={(householdId) => onClickDetails(householdId)}
                 onClickVisit={(householdId) => onClickVisit(householdId)}
                 onDeselectIds={(ids) =>
                   onUpdateSelection(

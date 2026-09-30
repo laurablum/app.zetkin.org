@@ -15,12 +15,17 @@ module.exports = {
   allowedDevOrigins: [],
 
   experimental: {
-    esmExternals: "loose",
-    serverComponentsExternalPackages: ["mjml", "mongoose"],
+    turbo: {
+      resolveAlias: {
+        canvas: 'util',
+      },
+    },
+    serverComponentsExternalPackages: ['mjml', 'mongoose'],
   },
   images: {
     domains: [
       `files.${process.env.ZETKIN_API_DOMAIN}`,
+      `avatars.${process.env.ZETKIN_API_DOMAIN}`,
 
       // localhost added for playwright testing
       'localhost',
@@ -77,7 +82,7 @@ module.exports = {
       },
       {
         source:
-          '/organize/:orgId(\\d{1,})/projects/:campId(\\d{1,})/calendar/events/:eventId(\\d{1,})',
+          '/organize/:orgId(\\d{1,})/projects/:projectId(\\d{1,})/calendar/events/:eventId(\\d{1,})',
         destination: '/legacy?path=/campaign/action%3A:eventId&orgId=:orgId',
         permanent: false,
       },

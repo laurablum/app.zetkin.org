@@ -1,30 +1,36 @@
+import { useContext } from 'react';
+
+import { PromiseCacheContext } from 'core/caching/PromiseCache';
+
 type UsePromiseCacheReturn = {
   cache: (promise: Promise<unknown>) => void;
+  getExistingPromise: () => Promise<unknown> | undefined;
 };
-
-// TODO: Store this in context?
-const promises: Record<string, Promise<unknown>> = {};
 
 export default function usePromiseCache(
   cacheKey: string
 ): UsePromiseCacheReturn {
-  const oldPromise = promises[cacheKey];
+  const promiseCache = useContext(PromiseCacheContext);
 
-  if (oldPromise) {
-    throw oldPromise;
+  if (!promiseCache) {
+    throw new Error(
+      'usePromiseCache must be used within a PromiseCacheProvider'
+    );
   }
 
   return {
     cache(promise) {
-      promises[cacheKey] = promise;
+      promiseCache.set(cacheKey, promise);
 
-      promise.then(() => {
-        delete promises[cacheKey];
+      promise.finally(() => {
+        if (promiseCache.get(cacheKey) === promise) {
+          promiseCache.delete(cacheKey);
+        }
       });
+    },
 
-      promise.catch(() => {
-        delete promises[cacheKey];
-      });
+    getExistingPromise() {
+      return promiseCache.get(cacheKey);
     },
   };
 }

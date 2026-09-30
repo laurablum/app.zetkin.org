@@ -2,7 +2,8 @@ import { z } from 'zod';
 
 import IApiClient from 'core/api/client/IApiClient';
 import { makeRPCDef } from 'core/rpc/types';
-import { Zetkin2Household, ZetkinHouseholdVisit } from 'features/canvass/types';
+import { ZetkinHouseholdVisit } from 'features/canvass/types';
+import { fetchAllPaginated } from 'utils/fetchAllPaginated';
 
 const paramsSchema = z.object({
   assignmentId: z.number(),
@@ -26,16 +27,13 @@ export default makeRPCDef<Params, Result>(loadLocationHouseholdVisitsDef.name);
 async function handle(params: Params, apiClient: IApiClient): Promise<Result> {
   const { assignmentId, locationId, orgId } = params;
 
-  const households = await apiClient.get<Zetkin2Household[]>(
-    `/api2/orgs/${orgId}/locations/${locationId}/households`
+  const visits = await fetchAllPaginated(
+    (page) =>
+      apiClient.get<ZetkinHouseholdVisit[]>(
+        `/api2/orgs/${orgId}/area_assignments/${assignmentId}/locations/${locationId}/household_visits?page=${page}&size=100`
+      ),
+    100
   );
-  const visits: ZetkinHouseholdVisit[] = [];
-  for await (const household of households) {
-    const householdVisits = await apiClient.get<ZetkinHouseholdVisit[]>(
-      `/api2/orgs/${orgId}/area_assignments/${assignmentId}/households/${household.id}/visits`
-    );
-    visits.push(...householdVisits);
-  }
 
   return { visits };
 }

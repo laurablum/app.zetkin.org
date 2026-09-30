@@ -1,0 +1,138 @@
+import { useSearchParams } from 'next/navigation';
+import { useStore } from 'react-redux';
+import { useCallback, useEffect, useMemo } from 'react';
+
+import { useAppDispatch } from 'core/hooks';
+import { initiateAssignment, initiateWithoutAssignment } from '../store';
+import useLocalStorage from 'zui/hooks/useLocalStorage';
+import { LaneState } from '../types';
+import useUser from 'core/hooks/useUser';
+import { RootState } from 'core/store';
+import useMyAssignments from './useMyAssignments';
+
+const minute = 60 * 1000;
+const LANES_TTL = 60 * minute;
+
+const CURRENT_CALL_LANES_VERSION = 1;
+
+export default function useCallInitialization() {
+  const dispatch = useAppDispatch();
+  const queryParams = useSearchParams();
+  const store = useStore();
+  const user = useUser();
+  const userCallAssignments = useMyAssignments();
+
+  const [callLanes, setLanes, clearCallLanes] = useLocalStorage<{
+    activeLaneIndex: number;
+    lanes: LaneState[];
+    timestamp: number;
+    userId: number;
+    version: number;
+  } | null>('callLanes', null);
+
+  useEffect(() => {
+    const unsubscribe = store.subscribe(() => {
+      const state = store.getState() as RootState;
+      if (user?.id) {
+        setLanes({
+          activeLaneIndex: state.call.activeLaneIndex,
+          lanes: state.call.lanes,
+          timestamp: new Date().getTime(),
+          userId: user.id,
+          version: CURRENT_CALL_LANES_VERSION,
+        });
+      }
+    });
+    return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store]);
+
+  const assignmentIdFromQuery = queryParams?.get('assignment');
+
+  const lanesAssignedToUser = useMemo(
+    () =>
+      callLanes && callLanes.version == CURRENT_CALL_LANES_VERSION
+        ? callLanes.lanes.filter((lane) =>
+            userCallAssignments.some(
+              (assignment) => assignment.id == lane.assignmentId
+            )
+          )
+        : [],
+    [callLanes, userCallAssignments]
+  );
+
+  const activeLanes = useMemo(
+    () =>
+      lanesAssignedToUser.filter((lane) => {
+        const assignment = userCallAssignments.find(
+          (assignment) => assignment.id == lane.assignmentId
+        );
+
+        if (assignment) {
+          const startDate = assignment.start_date;
+          const endDate = assignment.end_date;
+          const now = new Date();
+
+          const hasStarted = startDate && new Date(startDate) < now;
+          const isOngoing = !endDate || (endDate && new Date(endDate) > now);
+          return assignment && hasStarted && isOngoing;
+        }
+
+        return false;
+      }),
+    [lanesAssignedToUser, userCallAssignments]
+  );
+
+  let canInitialize = false;
+  if (assignmentIdFromQuery) {
+    canInitialize = true;
+  } else if (callLanes && callLanes.version == CURRENT_CALL_LANES_VERSION) {
+    const thisUserHasSavedLanes =
+      activeLanes.length > 0 && !!user && callLanes.userId == user.id;
+
+    const savedLanesAreFresh =
+      callLanes.timestamp > new Date().getTime() - LANES_TTL;
+
+    canInitialize = thisUserHasSavedLanes && savedLanesAreFresh;
+  }
+
+  const clearStaleCallLanes = useCallback(() => {
+    const callLanesAreStale =
+      callLanes && callLanes.timestamp < new Date().getTime() - LANES_TTL;
+
+    if (callLanesAreStale) {
+      setLanes(null);
+    }
+  }, [callLanes, setLanes]);
+
+  const initialize = useCallback(() => {
+    if (assignmentIdFromQuery) {
+      const thisUserHasSavedLanes =
+        activeLanes.length > 0 && !!user && callLanes?.userId == user.id;
+
+      const savedLanesAreFresh =
+        callLanes && callLanes.timestamp > new Date().getTime() - LANES_TTL;
+
+      const canUseSavedLanes = thisUserHasSavedLanes && savedLanesAreFresh;
+
+      dispatch(
+        initiateAssignment([
+          parseInt(assignmentIdFromQuery),
+          canUseSavedLanes ? activeLanes : [],
+        ])
+      );
+      history.replaceState(null, '', '/call');
+    } else if (callLanes) {
+      dispatch(
+        initiateWithoutAssignment([callLanes.activeLaneIndex, activeLanes])
+      );
+    }
+  }, [assignmentIdFromQuery, activeLanes, callLanes, dispatch, user]);
+
+  return {
+    canInitialize,
+    clearCallLanes,
+    clearStaleCallLanes,
+    initialize,
+  };
+}

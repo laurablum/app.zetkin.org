@@ -1,0 +1,279 @@
+'use client';
+
+import { Alert, Box, Slide, Snackbar } from '@mui/material';
+import { InfoOutlined } from '@mui/icons-material';
+import { FC, useMemo, useState } from 'react';
+
+import useCurrentCall from '../hooks/useCurrentCall';
+import { LaneStep } from '../types';
+import { useAppSelector, useEnv } from 'core/hooks';
+import useServerSide from 'core/useServerSide';
+import ZUILogoLoadingIndicator from 'zui/ZUILogoLoadingIndicator';
+import ZUIText from 'zui/components/ZUIText';
+import useUnfinishedCalls from '../hooks/useUnfinishedCalls';
+import useCallMutations from '../hooks/useCallMutations';
+import CallSwitchModal from '../components/CallSwitchModal';
+import ZUIModal from 'zui/components/ZUIModal';
+import useCurrentAssignment from '../hooks/useCurrentAssignment';
+import useMyAssignments from '../hooks/useMyAssignments';
+import { Msg, useMessages } from 'core/i18n';
+import messageIds from '../l10n/messageIds';
+import CallHeader from './CallHeader';
+import CallPanels from './CallPanels';
+import ZUILink from 'zui/components/ZUILink';
+import SkipCallDialog from './SkipCallDialog';
+
+const HEIGHT_OF_HEADER = '100px';
+//TODO Delete this when removing new ui alert
+const HEIGHT_OF_NEW_UI_ALERT = '56px';
+
+type Props = {
+  onResetAfterError: (urlToNavigateTo: string) => void;
+};
+
+const NewUIAlert: FC<{ assignmentId: number }> = ({ assignmentId }) => {
+  const messages = useMessages(messageIds);
+  const env = useEnv();
+
+  return (
+    <Box
+      sx={(theme) => {
+        const backgroundShade = theme.palette.mode === 'dark' ? 900 : 100;
+        const textShade = theme.palette.mode === 'dark' ? 100 : 900;
+        return {
+          alignItems: 'center',
+          backgroundColor: theme.palette.swatches.blue[backgroundShade],
+          color: theme.palette.swatches.blue[textShade],
+          display: 'flex',
+          gap: '1rem',
+          height: HEIGHT_OF_NEW_UI_ALERT,
+          padding: '1rem',
+          textDecorationColor: theme.palette.swatches.blue[textShade],
+        };
+      }}
+    >
+      <InfoOutlined
+        sx={(theme) => ({
+          color: theme.palette.info.main,
+          fontSize: '1.25rem',
+        })}
+      />
+      <ZUIText color="inherit" variant="bodyMdSemiBold">
+        <Msg
+          id={messageIds.newUIAlert.title}
+          values={{
+            description: (
+              <ZUIText color="inherit" component="span">
+                <Msg
+                  id={messageIds.newUIAlert.description}
+                  values={{
+                    link: (
+                      <ZUILink
+                        href={`${env.vars.ZETKIN_GEN2_CALL_URL}/assignments/${assignmentId}/call`}
+                        inheritColor
+                        size="medium"
+                        text={messages.newUIAlert.linkText()}
+                      />
+                    ),
+                  }}
+                />
+              </ZUIText>
+            ),
+          }}
+        />
+      </ZUIText>
+    </Box>
+  );
+};
+
+const Call: FC<Props> = ({ onResetAfterError }) => {
+  const messages = useMessages(messageIds);
+  const onServer = useServerSide();
+  const assignment = useCurrentAssignment();
+  const allUserAssignments = useMyAssignments();
+
+  const [callLogOpen, setCallLogOpen] = useState(false);
+  const [assignmentSwitchedTo, setAssignmentSwitchedTo] = useState<
+    number | null
+  >(null);
+  const [skipCallModalOpen, setSkipCallModalOpen] = useState(false);
+
+  const call = useCurrentCall();
+
+  const { switchToUnfinishedCall } = useCallMutations(
+    assignment.organization.id
+  );
+  const unfinishedCalls = useUnfinishedCalls();
+
+  const lane = useAppSelector(
+    (state) => state.call.lanes[state.call.activeLaneIndex]
+  );
+  const report = useAppSelector(
+    (state) => state.call.lanes[state.call.activeLaneIndex].report
+  );
+
+  const filteredUnfinishedCalls = useMemo(
+    () =>
+      unfinishedCalls.filter((unfinishedCall) =>
+        call ? call.id != unfinishedCall.id : true
+      ),
+    [unfinishedCalls, call]
+  );
+
+  const switchedTo = useMemo(
+    () => allUserAssignments.find((oc) => oc.id == assignmentSwitchedTo),
+    [allUserAssignments, assignmentSwitchedTo]
+  );
+
+  if (onServer) {
+    return (
+      <Box
+        sx={{
+          alignItems: 'center',
+          display: 'flex',
+          height: '100dvh',
+          justifyContent: 'center',
+        }}
+      >
+        <ZUILogoLoadingIndicator />
+      </Box>
+    );
+  }
+
+  return (
+    <>
+      <Box
+        sx={(theme) => ({
+          backgroundColor: theme.palette.common.white,
+          height: '100dvh',
+          overflow: 'hidden',
+        })}
+      >
+        {lane.step === LaneStep.START && (
+          <NewUIAlert assignmentId={assignment.id} />
+        )}
+        <CallHeader
+          assignment={assignment}
+          call={call}
+          hasUnfinishedCalls={filteredUnfinishedCalls.length > 0}
+          lane={lane}
+          onSkipCall={() => setSkipCallModalOpen(true)}
+          report={report}
+        />
+        <Box
+          height={`calc(100dvh - ${HEIGHT_OF_HEADER} ${lane.step === LaneStep.START ? `- ${HEIGHT_OF_NEW_UI_ALERT}` : ''})`}
+          position="relative"
+          width="100%"
+        >
+          <CallPanels
+            assignment={assignment}
+            call={call}
+            lane={lane}
+            onOpenCallLog={() => setCallLogOpen(true)}
+            onSwitchToUnfinishedCall={(callId, assignmentId) => {
+              switchToUnfinishedCall(callId, assignmentId);
+              if (assignmentId != assignment.id) {
+                setAssignmentSwitchedTo(assignmentId);
+              }
+            }}
+            report={report}
+            unfinishedCalls={filteredUnfinishedCalls}
+          />
+        </Box>
+      </Box>
+      <ZUIModal
+        open={
+          !call && (lane.step == LaneStep.CALL || lane.step == LaneStep.REPORT)
+        }
+        primaryButton={{
+          label: messages.unexpectedError.reloadButton(),
+          onClick: () => onResetAfterError(`/call/${assignment.id}`),
+        }}
+        secondaryButton={{
+          label: messages.unexpectedError.backToMyZetkinButton(),
+          onClick: () => onResetAfterError('/my'),
+        }}
+        title={messages.unexpectedError.title()}
+      >
+        <Box sx={{ paddingTop: 2 }}>
+          <ZUIText>
+            <Msg id={messageIds.unexpectedError.description} />
+          </ZUIText>
+        </Box>
+      </ZUIModal>
+      <CallSwitchModal
+        assignment={assignment}
+        onClose={() => setCallLogOpen(false)}
+        onSwitch={(assignmentId) => {
+          if (assignmentId != assignment.id) {
+            setAssignmentSwitchedTo(assignmentId);
+          }
+        }}
+        open={callLogOpen}
+      />
+      {call && (
+        <SkipCallDialog
+          assignment={assignment}
+          callId={call.id}
+          onClose={() => setSkipCallModalOpen(false)}
+          open={skipCallModalOpen}
+          targetName={call.target.name}
+        />
+      )}
+      <Snackbar
+        anchorOrigin={{ horizontal: 'left', vertical: 'bottom' }}
+        autoHideDuration={5000}
+        onClose={(ev, reason) => {
+          if (reason == 'clickaway') {
+            return;
+          } else {
+            setAssignmentSwitchedTo(null);
+          }
+        }}
+        open={!!assignmentSwitchedTo}
+        slots={{
+          transition: (props) => {
+            return (
+              <Slide
+                {...props}
+                direction="right"
+                timeout={{
+                  enter: 500,
+                  exit: 300,
+                }}
+              />
+            );
+          },
+        }}
+        sx={{
+          '@media (min-width: 600px)': {
+            bottom: 68,
+            left: 16,
+          },
+        }}
+      >
+        <Alert
+          icon={false}
+          onClose={() => setAssignmentSwitchedTo(null)}
+          severity="success"
+          sx={(theme) => ({
+            backgroundColor: theme.palette.common.white,
+            borderLeft: `4px solid ${theme.palette.success.main}`,
+            boxShadow: theme.elevation.bottom.big.medium,
+          })}
+        >
+          {switchedTo && (
+            <ZUIText>
+              <Msg
+                id={messageIds.switchedAssignmentsAlert.message}
+                values={{ assignmentTitle: switchedTo.title }}
+              />
+            </ZUIText>
+          )}
+        </Alert>
+      </Snackbar>
+    </>
+  );
+};
+
+export default Call;

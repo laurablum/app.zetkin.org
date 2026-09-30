@@ -1,7 +1,8 @@
-import { FC, useState } from 'react';
+import { FC, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Avatar,
   Box,
+  CircularProgress,
   List,
   ListItem,
   ListItemAvatar,
@@ -11,15 +12,19 @@ import dayjs, { Dayjs } from 'dayjs';
 import { useIntl } from 'react-intl';
 import {
   CalendarMonthOutlined,
+  Close,
   Chair,
   Clear,
   GroupWork,
   Hotel,
+  Search,
 } from '@mui/icons-material';
 import { DateRangeCalendar, DateRangePickerDay } from '@mui/x-date-pickers-pro';
+import { partition } from 'lodash';
+import Fuse from 'fuse.js';
 
 import EventCard from './EventCard';
-import { ZetkinCallTarget } from '../types';
+import { LaneStep, ZetkinCallTarget } from '../types';
 import { ZetkinCallAssignment } from 'utils/types/zetkin';
 import SurveyCard from './SurveyCard';
 import useFilteredActivities, {
@@ -32,11 +37,19 @@ import ZUIText from 'zui/components/ZUIText';
 import ZUIDrawerModal from 'zui/components/ZUIDrawerModal';
 import { getContrastColor } from 'utils/colorUtils';
 import notEmpty from 'utils/notEmpty';
-import { ACTIVITIES } from 'features/campaigns/types';
+import {
+  ACTIVITIES,
+  EventActivity,
+  SurveyActivity,
+} from 'features/projects/types';
 import ZUIIcon from 'zui/components/ZUIIcon';
 import { MUIIcon } from 'zui/components/types';
 import Survey from './Survey';
 import ZUISection from 'zui/components/ZUISection';
+import messageIds from '../l10n/messageIds';
+import { Msg, useMessages } from 'core/i18n';
+import ZUITextField from 'zui/components/ZUITextField';
+import useDebounce from 'utils/hooks/useDebounce';
 
 type Filter = {
   active: boolean;
@@ -68,6 +81,88 @@ const Activities: FC<ActivitiesProps> = ({
   showNoSignups,
   target,
 }) => {
+  const [userInput, setUserInput] = useState<string>('');
+  const [searchString, setSearchString] = useState<string>('');
+
+  const fuse = useMemo(() => {
+    return new Fuse(activities, {
+      keys: [
+        { name: 'data.campaign.title', weight: 1 },
+        { name: 'data.organization.title', weight: 1 },
+        { name: 'data.location.title', weight: 1 },
+        { name: 'data.title', weight: 3 },
+        { name: 'data.activity.title', weight: 2 },
+      ],
+      threshold: 0.3,
+    });
+  }, [activities]);
+
+  const debouncedFinishedTyping = useDebounce(async (value: string) => {
+    setSearchString(value);
+  }, 400);
+
+  const clearSearchString = useCallback(() => {
+    setSearchString('');
+    setUserInput('');
+  }, []);
+
+  const isEventActivity = (activity: Activity): activity is EventActivity => {
+    return 'start_time' in activity.data;
+  };
+
+  const isSurveyActivity = (activity: Activity): activity is SurveyActivity => {
+    return 'access' in activity.data;
+  };
+
+  const sortActivitiesByDate = useCallback((a: Activity, b: Activity) => {
+    const aVisibleFrom = a.visibleFrom ? new Date(a.visibleFrom) : null;
+    const bVisibleFrom = b.visibleFrom ? new Date(b.visibleFrom) : null;
+    if (isEventActivity(a) && isEventActivity(b)) {
+      const aStart = new Date(a.data.start_time);
+      const bStart = new Date(b.data.start_time);
+
+      return aStart.getTime() - bStart.getTime();
+    } else if (isSurveyActivity(a) && isSurveyActivity(b)) {
+      if (!aVisibleFrom && !bVisibleFrom) {
+        return 0;
+      } else if (!aVisibleFrom) {
+        return -1;
+      } else if (!bVisibleFrom) {
+        return 1;
+      }
+
+      return aVisibleFrom.getTime() - bVisibleFrom.getTime();
+    } else if (isEventActivity(a) && isSurveyActivity(b)) {
+      const aStart = new Date(a.data.start_time);
+
+      return bVisibleFrom ? aStart.getTime() - bVisibleFrom.getTime() : 1;
+    } else if (isSurveyActivity(a) && isEventActivity(b)) {
+      const bStart = new Date();
+
+      return aVisibleFrom ? aVisibleFrom.getTime() - bStart.getTime() : -1;
+    }
+
+    //Should never happen
+    return 0;
+  }, []);
+
+  const filteredActivities = useMemo(
+    () =>
+      searchString
+        ? fuse
+            .search(searchString)
+            .map((fuseResult) => fuseResult.item)
+            .sort(sortActivitiesByDate)
+        : [...activities.sort(sortActivitiesByDate)],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activities, searchString]
+  );
+
+  useEffect(() => {
+    clearSearchString();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
+
   if (!target) {
     return null;
   }
@@ -96,22 +191,16 @@ const Activities: FC<ActivitiesProps> = ({
             onClick={() => onClearFilters()}
           />
         )}
-        {baseFilters.map((filter) => (
-          <ZUIFilterButton
-            key={filter.key}
-            active={filter.active}
-            label={filter.label}
-            onClick={filter.onClick}
-          />
-        ))}
-        {eventFilters.map((filter) => (
-          <ZUIFilterButton
-            key={filter.key}
-            active={filter.active}
-            label={filter.label}
-            onClick={filter.onClick}
-          />
-        ))}
+        {partition([...baseFilters, ...eventFilters], (filter) => filter.active)
+          .flat()
+          .map((filter) => (
+            <ZUIFilterButton
+              key={filter.key}
+              active={filter.active}
+              label={filter.label}
+              onClick={filter.onClick}
+            />
+          ))}
       </Box>
       {showNoActivities && (
         <Box
@@ -124,7 +213,9 @@ const Activities: FC<ActivitiesProps> = ({
           }}
         >
           <ZUIIcon color="secondary" icon={Chair} size="large" />
-          <ZUIText color="secondary">No activities</ZUIText>
+          <ZUIText color="secondary">
+            <Msg id={messageIds.activities.empty} />
+          </ZUIText>
         </Box>
       )}
       {showNoSignups && (
@@ -138,11 +229,29 @@ const Activities: FC<ActivitiesProps> = ({
           }}
         >
           <ZUIIcon color="secondary" icon={Hotel} size="large" />
-          <ZUIText color="secondary">{`${target.first_name} is not booked or signed up for any events.`}</ZUIText>
+          <ZUIText color="secondary">
+            <Msg
+              id={messageIds.activities.noBookings}
+              values={{ name: target.first_name }}
+            />
+          </ZUIText>
         </Box>
       )}
-      {activities.map((activity) => {
-        if (activity.kind == ACTIVITIES.EVENT) {
+      {activities.length !== 0 && (
+        <ZUITextField
+          endIcon={Close}
+          fullWidth
+          onChange={(newValue) => {
+            setUserInput(newValue);
+            debouncedFinishedTyping(newValue);
+          }}
+          onEndIconClick={() => clearSearchString()}
+          startIcon={Search}
+          value={userInput}
+        />
+      )}
+      {filteredActivities.map((activity) => {
+        if (target && activity.kind == ACTIVITIES.EVENT) {
           return (
             <EventCard
               key={activity.data.id}
@@ -168,125 +277,165 @@ const Activities: FC<ActivitiesProps> = ({
 
 type ActivitiesSectionProps = {
   assignment: ZetkinCallAssignment;
+  step: LaneStep;
   target: ZetkinCallTarget | null;
 };
 
 const ActivitiesSection: FC<ActivitiesSectionProps> = ({
   assignment,
+  step,
   target,
 }) => {
+  const messages = useMessages(messageIds);
   const intl = useIntl();
   const dispatch = useAppDispatch();
-  const { events, filteredActivities, filteredEvents, getDateRange, surveys } =
-    useFilteredActivities(assignment.organization.id);
   const {
-    filterState,
-    customDatesToFilterEventsBy,
-    eventDateFilterState,
-    orgIdsToFilterEventsBy,
-    projectIdsToFilterActivitiesBy,
-  } = useAppSelector((state) => state.call.filters);
-  const { respondedEventIds, submissionDataBySurveyId } = useAppSelector(
-    (state) => state.call.lanes[state.call.activeLaneIndex]
+    events,
+    filteredActivities,
+    filteredEvents,
+    getDateRange,
+    surveys,
+    surveysLoading,
+  } = useFilteredActivities(assignment.organization.id);
+  const {
+    respondedEventIds,
+    submissionDataBySurveyId,
+    selectedSurveyId,
+    filters: {
+      filterState,
+      customDatesToFilterEventsBy,
+      eventDateFilterState,
+      orgIdsToFilterEventsBy,
+      projectIdsToFilterActivitiesBy,
+    },
+  } = useAppSelector((state) => state.call.lanes[state.call.activeLaneIndex]);
+
+  const respondedSurveyIds = useMemo(
+    () => Object.keys(submissionDataBySurveyId),
+    [submissionDataBySurveyId]
   );
-  const selectedSurveyId = useAppSelector(
-    (state) => state.call.selectedSurveyId
-  );
-  const respondedSurveyIds = Object.keys(submissionDataBySurveyId);
 
   const [drawerContent, setDrawerContent] = useState<
     'orgs' | 'calendar' | 'context' | null
   >(null);
-  const selectedSurvey =
-    surveys.find((survey) => survey.id == selectedSurveyId) || null;
+  const selectedSurvey = useMemo(
+    () => surveys.find((survey) => survey.id == selectedSurveyId) || null,
+    [surveys, selectedSurveyId]
+  );
 
-  const getDatesFilteredBy = (end: Dayjs | null, start: Dayjs) => {
-    if (!end) {
-      return intl.formatDate(start.toDate(), {
-        day: 'numeric',
-        month: 'short',
-      });
-    } else {
-      return intl.formatDateTimeRange(start.toDate(), end.toDate(), {
-        day: 'numeric',
-        month: 'short',
-      });
-    }
-  };
+  const getDatesFilteredBy = useCallback(
+    (end: Dayjs | null, start: Dayjs) => {
+      if (!end) {
+        return intl.formatDate(start.toDate(), {
+          day: 'numeric',
+          month: 'short',
+        });
+      } else {
+        return intl.formatDateTimeRange(start.toDate(), end.toDate(), {
+          day: 'numeric',
+          month: 'short',
+        });
+      }
+    },
+    [intl]
+  );
 
   const isFiltered =
-    filterState.alreadyIn || filterState.events || filterState.surveys;
+    filterState.alreadyIn ||
+    filterState.events ||
+    filterState.surveys ||
+    filterState.thisCall ||
+    projectIdsToFilterActivitiesBy.length > 0;
   const showAll =
     !filterState.alreadyIn && !filterState.events && !filterState.surveys;
 
-  const orgs = [
-    ...new Map(
-      events.map((event) => event.organization).map((org) => [org['id'], org])
-    ).values(),
-  ].sort((a, b) => a.title.localeCompare(b.title));
+  const orgs = useMemo(
+    () =>
+      [
+        ...new Map(
+          events
+            .map((event) => event.organization)
+            .map((org) => [org['id'], org])
+        ).values(),
+      ].sort((a, b) => a.title.localeCompare(b.title)),
+    [events]
+  );
 
-  const surveysWithCampaign = surveys.filter((survey) => !!survey.campaign);
-  const eventsWithCampaign = events.filter((event) => !!event.campaign);
+  const surveysWithProject = useMemo(
+    () => surveys.filter((survey) => !!survey.campaign),
+    [surveys]
+  );
+  const eventsWithProject = useMemo(
+    () => events.filter((event) => !!event.campaign),
+    [events]
+  );
 
-  const activitiesWithCampaign = [
-    ...surveysWithCampaign,
-    ...eventsWithCampaign,
-  ];
+  const activitiesWithProject = useMemo(
+    () => [...surveysWithProject, ...eventsWithProject],
+    [eventsWithProject, surveysWithProject]
+  );
 
-  const projects: { id: 'noProject' | number; title: string }[] = [
-    ...new Map(
-      eventsWithCampaign
-        .map((event) => event.campaign)
-        .filter(notEmpty)
-        .map((campaign) => [campaign['title'], campaign])
-    ).values(),
-    ...new Map(
-      surveysWithCampaign
-        .map((survey) => survey.campaign)
-        .filter(notEmpty)
-        .map((campaign) => [campaign['title'], campaign])
-    ).values(),
-  ].sort((a, b) => a.title.localeCompare(b.title));
+  const projectOptions = useMemo(() => {
+    const projects: { id: 'noProject' | number; title: string }[] = [
+      ...new Map(
+        eventsWithProject
+          .map((event) => event.campaign)
+          .filter(notEmpty)
+          .map((project) => [project['title'], project])
+      ).values(),
+      ...new Map(
+        surveysWithProject
+          .map((survey) => survey.campaign)
+          .filter(notEmpty)
+          .map((project) => [project['title'], project])
+      ).values(),
+    ].sort((a, b) => a.title.localeCompare(b.title));
 
-  if (activitiesWithCampaign.length != surveys.length + events.length) {
-    projects.push({ id: 'noProject', title: 'noProject' });
-  }
-
-  const orgIdsWithEvents = events.reduce<number[]>((orgIds, event) => {
-    if (!orgIds.includes(event.organization.id)) {
-      orgIds = [...orgIds, event.organization.id];
+    if (activitiesWithProject.length != surveys.length + events.length) {
+      projects.push({ id: 'noProject', title: 'noProject' });
     }
-    return orgIds;
-  }, []);
+    return projects;
+  }, [
+    eventsWithProject,
+    surveysWithProject,
+    activitiesWithProject.length,
+    surveys.length,
+    events.length,
+  ]);
 
-  const projectIdsWithSurveys = surveys.reduce<(number | 'noProject')[]>(
-    (projectIds, survey) => {
-      if (survey.campaign && !projectIds.includes(survey.campaign.id)) {
-        projectIds = [...projectIds, survey.campaign.id];
-      } else if (!survey.campaign && !projectIds.includes('noProject')) {
-        projectIds = [...projectIds, 'noProject'];
-      }
-      return projectIds;
-    },
-    []
+  const orgIdsWithEvents = useMemo(
+    () => Array.from(new Set(events.map((event) => event.organization.id))),
+    [events]
   );
 
-  const projectIdsWithEvents = events.reduce<(number | 'noProject')[]>(
-    (projectIds, event) => {
-      if (event.campaign && !projectIds.includes(event.campaign.id)) {
-        projectIds = [...projectIds, event.campaign.id];
-      } else if (!event.campaign && !projectIds.includes('noProject')) {
-        projectIds = [...projectIds, 'noProject'];
-      }
-      return projectIds;
-    },
-    []
+  const projectIdsWithSurveys = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          surveys.map((survey) =>
+            survey.campaign ? survey.campaign.id : 'noProject'
+          )
+        )
+      ),
+    [surveys]
   );
 
-  const projectIdsWithActivities = [
-    ...projectIdsWithEvents,
-    ...projectIdsWithSurveys,
-  ];
+  const projectIdsWithEvents = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          events.map((event) =>
+            event.campaign ? event.campaign.id : 'noProject'
+          )
+        )
+      ),
+    [events]
+  );
+
+  const projectIdsWithActivities = useMemo(
+    () => [...projectIdsWithEvents, ...projectIdsWithSurveys],
+    [projectIdsWithEvents, projectIdsWithSurveys]
+  );
 
   const moreThanOneOrgHasEvents = orgIdsWithEvents.length > 1;
   const moreThanOneProjectHasActivities = projectIdsWithActivities.length > 1;
@@ -299,7 +448,9 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
   const showAlreadyInFilter =
     filterState.alreadyIn || filterState.events || showAll;
   const showThisCallFilter =
-    respondedEventIds.length > 0 || respondedSurveyIds.length > 0;
+    respondedEventIds.length > 0 ||
+    respondedSurveyIds.length > 0 ||
+    step == LaneStep.REPORT;
 
   const baseFilters = [
     ...(showThisCallFilter
@@ -307,7 +458,7 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
           {
             active: filterState.thisCall,
             key: 'thisCall',
-            label: 'This call',
+            label: messages.activities.filters.basic.thisCall(),
             onClick: () => {
               dispatch(
                 filtersUpdated({
@@ -326,7 +477,7 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
           {
             active: filterState.alreadyIn,
             key: 'alreadyIn',
-            label: 'Already in',
+            label: messages.activities.filters.basic.alreadyIn(),
             onClick: () => {
               dispatch(
                 filtersUpdated({
@@ -345,7 +496,7 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
           {
             active: filterState.events || filterState.alreadyIn,
             key: 'events',
-            label: 'Events',
+            label: messages.activities.filters.basic.events(),
             onClick: () => {
               dispatch(
                 filtersUpdated({
@@ -361,7 +512,7 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
           {
             active: filterState.surveys,
             key: 'surveys',
-            label: 'Surveys',
+            label: messages.activities.filters.basic.surveys(),
             onClick: () => {
               dispatch(
                 filtersUpdated({
@@ -380,9 +531,15 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
           {
             active: !!projectIdsToFilterActivitiesBy.length,
             key: 'context',
-            label: projectIdsToFilterActivitiesBy.length
-              ? `${projectIdsToFilterActivitiesBy.length} projects`
-              : 'Context',
+            label:
+              projectIdsToFilterActivitiesBy.length != 1
+                ? messages.activities.filters.projects({
+                    numProjects: projectIdsToFilterActivitiesBy.length,
+                  })
+                : projectOptions.find(
+                    (project) => project.id == projectIdsToFilterActivitiesBy[0]
+                  )?.title ||
+                  messages.activities.filters.projects({ numProjects: 0 }),
             onClick: () => {
               if (projectIdsToFilterActivitiesBy.length) {
                 dispatch(
@@ -403,7 +560,7 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
     {
       active: eventDateFilterState == 'today',
       key: 'today',
-      label: 'Today',
+      label: messages.activities.filters.events.today(),
       onClick: () => {
         dispatch(
           filtersUpdated({
@@ -417,7 +574,7 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
     {
       active: eventDateFilterState == 'tomorrow',
       key: 'tomorrow',
-      label: 'Tomorrow',
+      label: messages.activities.filters.events.tomorrow(),
       onClick: () => {
         dispatch(
           filtersUpdated({
@@ -431,7 +588,7 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
     {
       active: eventDateFilterState == 'thisWeek',
       key: 'thisWeek',
-      label: 'This week',
+      label: messages.activities.filters.events.thisWeek(),
       onClick: () => {
         dispatch(
           filtersUpdated({
@@ -470,7 +627,12 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
           {
             active: !!orgIdsToFilterEventsBy.length,
             key: 'orgs',
-            label: `${orgIdsToFilterEventsBy.length} orgs`,
+            label:
+              orgIdsToFilterEventsBy.length > 0
+                ? messages.activities.filters.organizations.selected({
+                    numOrgs: orgIdsToFilterEventsBy.length,
+                  })
+                : messages.activities.filters.organizations.noSelected(),
             onClick: () => {
               if (orgIdsToFilterEventsBy.length) {
                 dispatch(
@@ -487,11 +649,40 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
       : []),
   ];
 
+  useEffect(() => {
+    const project = assignment.campaign;
+    const projectHasActivities =
+      !!project && projectIdsWithActivities.includes(project.id);
+
+    if (projectHasActivities) {
+      dispatch(
+        filtersUpdated({
+          projectIdsToFilterActivitiesBy: [project.id],
+        })
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.id]);
+
   return (
     <>
-      <Box id="accctivitiesSecitonOuter" sx={{ height: '100%', width: '100%' }}>
-        {selectedSurvey && <Survey survey={selectedSurvey} />}
-        {!selectedSurvey && (
+      <Box sx={{ height: '100%', width: '100%' }}>
+        {surveysLoading && (
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              height: '100%',
+              justifyContent: 'center',
+            }}
+          >
+            <CircularProgress />
+          </Box>
+        )}
+        {!surveysLoading && selectedSurvey && (
+          <Survey survey={selectedSurvey} />
+        )}
+        {!surveysLoading && !selectedSurvey && (
           <ZUISection
             borders={false}
             fullHeight
@@ -513,6 +704,7 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
                         thisCall: false,
                       },
                       orgIdsToFilterEventsBy: [],
+                      projectIdsToFilterActivitiesBy: [],
                     })
                   )
                 }
@@ -528,8 +720,14 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
                 target={target}
               />
             )}
-            subtitle={`Acting as ${target?.first_name}`}
-            title="Activities"
+            subtitle={
+              target
+                ? messages.activities.description({
+                    name: target.first_name,
+                  })
+                : ''
+            }
+            title={messages.activities.title()}
           />
         )}
       </Box>
@@ -642,25 +840,27 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
         open={drawerContent == 'context'}
       >
         <List>
-          {projects.map((project) => (
-            <ListItem key={project.id} sx={{ justifyContent: 'space-between' }}>
+          {projectOptions.map((option) => (
+            <ListItem key={option.id} sx={{ justifyContent: 'space-between' }}>
               <Box alignItems="center" display="flex">
                 <ListItemAvatar>
                   <GroupWork />
                 </ListItemAvatar>
                 <ZUIText>
-                  {project.id == 'noProject' ? 'No project' : project.title}
+                  {option.id == 'noProject'
+                    ? messages.activities.projects.wihoutProjectLabel()
+                    : option.title}
                 </ZUIText>
               </Box>
               <Switch
-                checked={projectIdsToFilterActivitiesBy.includes(project.id)}
+                checked={projectIdsToFilterActivitiesBy.includes(option.id)}
                 onChange={(_event, checked) => {
                   if (checked) {
                     dispatch(
                       filtersUpdated({
                         projectIdsToFilterActivitiesBy: [
                           ...projectIdsToFilterActivitiesBy,
-                          project.id,
+                          option.id,
                         ],
                       })
                     );
@@ -669,7 +869,7 @@ const ActivitiesSection: FC<ActivitiesSectionProps> = ({
                       filtersUpdated({
                         projectIdsToFilterActivitiesBy:
                           projectIdsToFilterActivitiesBy.filter(
-                            (id) => id != project.id
+                            (id) => id != option.id
                           ),
                       })
                     );

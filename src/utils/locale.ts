@@ -45,7 +45,7 @@ async function loadMessages(): Promise<MessageDB> {
   const basePath = path.resolve('./src/locale');
   const messages: MessageDB = {};
 
-  for await (const fullPath of findYMLFiles('./src')) {
+  for await (const fullPath of findYMLFiles(basePath)) {
     const localPath = fullPath.replace(basePath, '');
     const pathElems = localPath.split(path.sep).filter((elem) => elem.length);
     const fileName = pathElems.pop();
@@ -53,7 +53,7 @@ async function loadMessages(): Promise<MessageDB> {
       const dotPath = pathElems.join('.');
       const lang = fileName.replace('.yml', '');
 
-      const content = await fs.readFile(fullPath, 'utf8');
+      const content = await fs.readFile(fullPath || '', 'utf8');
       const data = yaml.parse(content);
       const flattened = flattenObject(data, dotPath);
 

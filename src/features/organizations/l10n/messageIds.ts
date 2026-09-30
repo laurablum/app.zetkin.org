@@ -1,6 +1,6 @@
 import { ReactElement } from 'react';
 
-import { m, makeMessages } from 'core/i18n';
+import { m, makeMessages } from 'core/i18n/messages';
 
 export default makeMessages('feat.organizations', {
   allEventsList: {
@@ -13,6 +13,7 @@ export default makeMessages('feat.organizations', {
       organizations: m<{ numOrgs: number }>(
         '{numOrgs, plural,=0 {Organizations} =1 {1 organization} other {# organizations}}'
       ),
+      selectDate: m('Select a date'),
       thisWeek: m('This week'),
       today: m('Today'),
       tomorrow: m('Tomorrow'),
@@ -30,11 +31,19 @@ export default makeMessages('feat.organizations', {
     cancelledParagraph: m(
       'You can no longer sign up for it and if you were signed up, you are no longer expected to attend.'
     ),
-    contactPerson: m<{ name: string }>('{name} is the contact person'),
+    contactPerson: {
+      default: m<{ name: string }>('{name} is the contact person'),
+      you: m('You are the contact person'),
+    },
     defaultTitle: m('Untitled event'),
+    haveAccount: m('I have an account'),
     loading: m('Loading...'),
+    noDescription: m('This event has no description'),
     noLocation: m('No physical location'),
     partOfProject: m<{ projectLink: ReactElement }>('Part of {projectLink}'),
+    participatingInfo: m<{ participatingCount: number }>(
+      '{participatingCount, plural, =1 {# person is} other {# persons are}} participating'
+    ),
     today: m('Today'),
   },
   gen3: {
@@ -54,15 +63,18 @@ export default makeMessages('feat.organizations', {
       copyIcsUrl: m('Copy calendar subscription URL'),
       follow: m('Follow'),
       login: m('Login & connect'),
+      organize: m('Organize'),
       unfollow: m('Unfollow'),
     },
     map: {
       viewInList: m('View in list'),
-      viewInMap: m('View in map'),
+      viewOnMap: m('View on map'),
     },
     menu: {
       logout: m('Logout'),
       myZetkin: m('My Zetkin'),
+      organize: m('Organize'),
+      settings: m('Settings'),
     },
     tabs: {
       calendar: m('Calendar'),
@@ -80,6 +92,11 @@ export default makeMessages('feat.organizations', {
     myPageButton: m('Go to activist portal'),
     title: m('You do not have organizer access'),
   },
+  overview: {
+    suborgs: {
+      title: m('Sub-organizations'),
+    },
+  },
   page: {
     title: m('Select organization:'),
   },
@@ -94,6 +111,14 @@ export default makeMessages('feat.organizations', {
       clear: m('Clear'),
       title: m('Recent organizations'),
     },
+  },
+  signupChoiceModal: {
+    description: m(
+      "Use your Zetkin account to sign up to an event. If you don't have an account, don't worry you can still sign up without one."
+    ),
+    title: m('How do you want to sign up?'),
+    withAccount: m('With an account'),
+    withoutAccount: m('Without an account'),
   },
   subOrgEventBlurb: {
     description: m<{

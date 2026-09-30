@@ -1,6 +1,6 @@
 import { ReactElement } from 'react';
 
-import { m, makeMessages } from 'core/i18n';
+import { m, makeMessages } from 'core/i18n/messages';
 
 export default makeMessages('feat.surveys', {
   addBlocks: {
@@ -17,6 +17,27 @@ export default makeMessages('feat.surveys', {
     notEditable: m<{ orgTitle: string }>(
       'This survey is owned by {orgTitle} and you can not edit it.'
     ),
+  },
+  autoLink: {
+    close: m('Close'),
+    columns: {
+      matchedEmail: m('Matched email'),
+      matchedFirstName: m('Matched first name'),
+      matchedLastName: m('Matched last name'),
+      submissionEmail: m('Email'),
+      submissionFirstName: m('First name'),
+      submissionLastName: m('Last name'),
+    },
+    error: m<{ err: string }>('Error while auto linking. ({msg})'),
+    linkSelected: m('Link selected'),
+    success: m<{ count: number }>(
+      'Auto linked {count, plural, =1 {one submission} other {# submissions}}!'
+    ),
+    title: m('Review auto linkable submissions'),
+    tooltips: {
+      notEnoughRowsSelected: m('You need to select at least one row to start'),
+      startAutoLinking: m('Start auto linking'),
+    },
   },
   blocks: {
     choice: {
@@ -106,9 +127,56 @@ export default makeMessages('feat.surveys', {
       ),
     },
   },
+  insights: {
+    error: m('Unknown error occurred while loading.'),
+    export: {
+      errorUnknown: m('Unknown error occurred while exporting.'),
+      toPdf: m('Export to pdf'),
+      toPng: m('Export to png'),
+    },
+    optionsFields: {
+      displayInsights: {
+        absoluteCount: m('Amount'),
+        percentCount: m('Percent'),
+      },
+      subheader: m<{
+        answerCount: number;
+        totalSelectedOptionsCount: number;
+      }>(
+        'In total, there were {answerCount, plural, =1 {1 answer} other {# answers}} and {totalSelectedOptionsCount, plural, =1 {1 selected option} other {# selected options}}.'
+      ),
+      tabs: {
+        barPlot: m('Bar'),
+        piePlot: m('Pie'),
+      },
+      warningMultipleSelectedOptionsPie: m<{ respondentCount: number }>(
+        'Note that this question allows respondents to choose more than one option, and {respondentCount, plural, =1 {1 respondent} other {# respondents}} did. This may make the pie chart misleading.'
+      ),
+    },
+    textFields: {
+      copyResponse: {
+        copy: m('Copy to clipboard'),
+        wasCopied: m('Copied!'),
+      },
+      subheader: m<{
+        answerCount: number;
+        totalUniqueWordCount: number;
+        totalWordCount: number;
+      }>(
+        'In total, there were {answerCount, plural, =1 {1 answer} other {# answers}}, {totalWordCount, plural, =1 {1 word} other {# words}} and {totalUniqueWordCount, plural, =1 {1 unique word} other {# unique words}}.'
+      ),
+      tabs: {
+        responses: m('Response'),
+        wordCloud: m('Cloud'),
+        wordFrequencies: m('Bar'),
+      },
+    },
+  },
   layout: {
     actions: {
+      createList: m('Create list from submissions'),
       delete: m('Delete'),
+      duplicate: m('Duplicate'),
       move: m('Move'),
       publish: m('Publish survey'),
       unpublish: m('Unpublish survey'),
@@ -156,8 +224,9 @@ export default makeMessages('feat.surveys', {
     anonymous: m('Anonymous'),
     hidden: m('Hidden'),
     linked: m('Linked'),
-    subtitle:
-      m<{ date: ReactElement; person: ReactElement }>('{person} {date}'),
+    subtitle: m<{ date: ReactElement; person: ReactElement }>(
+      '{person} {date}'
+    ),
   },
   submissions: {
     anonymous: m('Anonymous'),
@@ -178,10 +247,10 @@ export default makeMessages('feat.surveys', {
     suggestedPeople: m('Suggested people'),
     unlink: m('Unlink'),
   },
-  surveyChangeCampaignDialog: {
+  surveyChangeProjectDialog: {
     error: m('Error: Could not move the survey to the selected project'),
-    success: m<{ campaignTitle: string; surveyTitle: string }>(
-      'Survey "{surveyTitle}" moved to "{campaignTitle}"'
+    success: m<{ projectTitle: string; surveyTitle: string }>(
+      'Survey "{surveyTitle}" moved to "{projectTitle}"'
     ),
     title: m('Move survey'),
   },
@@ -189,9 +258,27 @@ export default makeMessages('feat.surveys', {
     add: m('Add'),
     cancel: m("Don't add"),
     description: m(
-      'The person you are about to link does not have an email address while the survey response does. Would you like to add it the person?'
+      'The person you have just linked does not have an email address while the survey response does. Would you like to add it the person?'
     ),
+    new: m('New'),
+    old: m('Old'),
     title: m('Add email address'),
+  },
+  surveyDialogDifferentEmail: {
+    description: m(
+      'The person you have just linked to has a different email to the one in the survey response. Would you like to set the survey response email to be the new email for this person?'
+    ),
+    keep: m('No, keep old email'),
+    title: m('Update email address'),
+    update: m('Yes, update email'),
+  },
+  surveyDuplicated: {
+    error: m('Error: Could not duplicate survey'),
+    success: m('Your survey has been duplicated.'),
+    title: m('Survey Duplicated'),
+  },
+  surveyEditor: {
+    required: m('Require the user to answer this question'),
   },
   surveyForm: {
     accept: m('I accept the terms stated below'),
@@ -199,7 +286,6 @@ export default makeMessages('feat.surveys', {
       'Something went wrong when submitting your answers. Please try again later.'
     ),
     policy: {
-      link: m('https://zetkin.org/privacy'),
       text: m('Click to read the full Zetkin Privacy Policy'),
     },
     required: m('required'),
@@ -216,6 +302,7 @@ export default makeMessages('feat.surveys', {
     },
   },
   surveyFormSubmitted: {
+    retakeSurvey: m('Retake survey'),
     text: m<{ title: string }>(
       'Your responses to “{title}” have been submitted.'
     ),
@@ -236,7 +323,14 @@ export default makeMessages('feat.surveys', {
       ),
     },
   },
+  surveyToList: {
+    error: m(
+      'Could not create list from survey submissions due to unknown error.'
+    ),
+    title: m<{ surveyTitle: string }>('Submissions from {surveyTitle}'),
+  },
   tabs: {
+    insights: m('Insights'),
     overview: m('Overview'),
     questions: m('Questions'),
     submissions: m('Submissions'),
@@ -251,6 +345,12 @@ export default makeMessages('feat.surveys', {
     ),
   },
   unlinkedWarningAlert: {
+    autoLink: {
+      canBeAutoLinkedText: m<{ countStr: string }>(
+        '{countStr, plural, =1 {1 submission} other {# submissions}} can be auto linked.'
+      ),
+      openDialogButton: m('Auto link submissions'),
+    },
     default: {
       description: m<{ numUnlink: number }>(
         "{numUnlink, plural, one {One survey submission has not been linked to a Zetkin profile, which means that it won't be included when searching.} other {There are survey submissions that have not been linked to Zetkin profiles, which means that they won't be included when searching.}}"

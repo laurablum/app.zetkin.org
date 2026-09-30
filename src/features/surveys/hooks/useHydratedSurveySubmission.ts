@@ -1,15 +1,24 @@
-import { loadListIfNecessary } from 'core/caching/cacheUtils';
+import { loadItemIfNecessary } from 'core/caching/cacheUtils';
 import useSurveySubmission from './useSurveySubmission';
 import {
   ELEMENT_TYPE,
   RESPONSE_TYPE,
-  ZetkinSurveyElement,
   ZetkinSurveyExtended,
   ZetkinSurveySubmission,
 } from 'utils/types/zetkin';
-import { elementsLoad, elementsLoaded } from '../store';
-import { IFuture, LoadingFuture, ResolvedFuture } from 'core/caching/futures';
+import {
+  extendedSurveyError,
+  extendedSurveyLoad,
+  extendedSurveyLoaded,
+} from '../store';
+import {
+  ErrorFuture,
+  IFuture,
+  LoadingFuture,
+  ResolvedFuture,
+} from 'core/caching/futures';
 import { useApiClient, useAppDispatch, useAppSelector } from 'core/hooks';
+import { serializeError } from 'utils/storeUtils/serializeError';
 
 type HydratedQuestionBase = {
   description: string | null;
@@ -52,6 +61,7 @@ type HydratedElement =
 
 export interface HydratedSurveySubmission {
   id: number;
+  project: ZetkinSurveyExtended['campaign'];
   respondent: ZetkinSurveySubmission['respondent'];
   organization: ZetkinSurveySubmission['organization'];
   elements: HydratedElement[];
@@ -68,34 +78,44 @@ export default function useHydratedSurveySubmission(
   const submissionFuture = useSurveySubmission(orgId, submissionId);
   const surveysSlice = useAppSelector((state) => state.surveys);
 
+  if (submissionFuture.error) {
+    return new ErrorFuture(submissionFuture.error);
+  }
+
   if (!submissionFuture.data) {
     return new LoadingFuture();
   }
 
   const submission = submissionFuture.data;
   const surveyId = submission.survey.id;
-  const elementsList = surveysSlice.elementsBySurveyId[surveyId];
+  const survey = surveysSlice.extendedSurveyBySurveyId[surveyId];
 
-  const surveyElementsFuture = loadListIfNecessary<
-    ZetkinSurveyElement,
+  const surveyElementsFuture = loadItemIfNecessary<
+    ZetkinSurveyExtended,
     number,
-    [number, ZetkinSurveyElement[]]
-  >(elementsList, dispatch, {
-    actionOnLoad: () => elementsLoad(surveyId),
-    actionOnSuccess: (elements) => elementsLoaded([surveyId, elements]),
+    [number, ZetkinSurveyExtended]
+  >(survey, dispatch, {
+    actionOnError: (err) =>
+      extendedSurveyError([surveyId, serializeError(err)]),
+    actionOnLoad: () => extendedSurveyLoad(surveyId),
+    actionOnSuccess: (survey) => extendedSurveyLoaded([surveyId, survey]),
     loader: async () => {
       const survey = await apiClient.get<ZetkinSurveyExtended>(
         `/api/orgs/${orgId}/surveys/${surveyId}`
       );
-      return survey.elements;
+      return survey;
     },
   });
+
+  if (surveyElementsFuture.error) {
+    return new ErrorFuture(surveyElementsFuture.error);
+  }
 
   if (!surveyElementsFuture.data) {
     return new LoadingFuture();
   }
 
-  const surveyElements = surveyElementsFuture.data;
+  const surveyElements = surveyElementsFuture.data.elements;
   const elements: HydratedElement[] = [];
 
   surveyElements.forEach((elem) => {
@@ -103,7 +123,7 @@ export default function useHydratedSurveySubmission(
       elements.push({
         header: elem.text_block.header,
         id: elem.id,
-        text: elem.text_block.content,
+        text: elem.text_block.content || '',
         type: ELEM_TYPE.TEXT_BLOCK,
       });
     } else {
@@ -161,6 +181,7 @@ export default function useHydratedSurveySubmission(
     elements,
     id: submission.id,
     organization: submission.organization,
+    project: surveyElementsFuture.data.campaign,
     respondent: submission.respondent,
     submitted: submission.submitted,
     survey: submission.survey,

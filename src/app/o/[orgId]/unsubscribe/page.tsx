@@ -2,7 +2,7 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 
 import BackendApiClient from 'core/api/client/BackendApiClient';
-import UnsubscribePage from 'features/emails/pages/UnsubscribePage';
+import UnsubscribePage from 'features/public/pages/UnsubscribePage';
 import { ZetkinOrganization } from 'utils/types/zetkin';
 
 type PageProps = {
@@ -10,6 +10,8 @@ type PageProps = {
     orgId: string;
   };
   searchParams: {
+    senderEmail?: string;
+    senderName?: string;
     unsub?: string;
   };
 };
@@ -21,16 +23,28 @@ export default async function Page({ params, searchParams }: PageProps) {
   const apiClient = new BackendApiClient(headersObject);
 
   const unsubUrl = searchParams.unsub;
-  if (!unsubUrl) {
+  const validUnsubUrl = unsubUrl?.startsWith('https://');
+
+  if (!unsubUrl || !validUnsubUrl) {
     return notFound();
   }
 
   try {
-    const org = await apiClient.get<ZetkinOrganization>(
-      `/api/orgs/${params.orgId}`
-    );
+    if (searchParams.senderName && searchParams.senderEmail) {
+      return (
+        <UnsubscribePage
+          senderEmail={searchParams.senderEmail}
+          senderName={searchParams.senderName}
+          unsubUrl={unsubUrl}
+        />
+      );
+    } else {
+      const org = await apiClient.get<ZetkinOrganization>(
+        `/api/orgs/${params.orgId}`
+      );
 
-    return <UnsubscribePage org={org} unsubUrl={unsubUrl} />;
+      return <UnsubscribePage org={org} unsubUrl={unsubUrl} />;
+    }
   } catch (err) {
     return notFound();
   }
